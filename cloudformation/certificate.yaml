@@ -1,0 +1,26 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: "SSL Certificate"
+
+Parameters:
+  Subdomain:
+    Type: String
+
+  DomainName:
+    Type: String
+
+Resources:
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      Tags: []
+
+Outputs:
+  Certificate:
+    Description: Certificate ARN
+    Value: !Ref Certificate
+    Export:
+      Name: !Sub "${AWS::Region}-${AWS::StackName}-Certificate"

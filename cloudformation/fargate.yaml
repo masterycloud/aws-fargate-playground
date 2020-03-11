@@ -1,12 +1,37 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
-Description: Fargate playground resources
+Description: Service Resources
 
 Parameters:
-
   VpcId:
-    Description: ID of the VPC to use for the service
     Type: AWS::EC2::VPC::Id
+
+  LoadBalancerPort:
+    Type: String
+
+  ContainerPort:
+    Type: Number
+
+  HostPort:
+    Type: Number
+
+  ApplicationProtocol:
+    Type: String
+
+  LoadBalancerArn:
+    Type: String
+
+  SslCertificateArn:
+    Type: String
+
+  DockerImage:
+    Type: String
+
+  DesiredCount:
+    Type: Number
+
+  LoadBalancerSecurityGroupId:
+    Type: String
 
   SubnetA:
     Type: AWS::EC2::Subnet::Id
@@ -14,260 +39,151 @@ Parameters:
   SubnetB:
     Type: AWS::EC2::Subnet::Id
 
-  AssignPublicIp:
-    Description: Set to ENABLED for public subnets without NAT gateway, otherwise DISABLED
-    Type: String
-
-  Image:
-    Description: Docker Image
-    Type: String
-
-  ContainerPort:
-    Description: Container port
-    Type: Number
-
-  CertificateArn:
-    Description: ARN of an existing ACM SSL Certificate
-    Type: String
-
-  LoadBalancerPort:
-    Description: Port number for the load balancer
-    Type: Number
-    Default: 443
-
-  HealthCheckPath:
-    Description: URL path to server health check
-    Type: String
-
-  HostedZoneName:
-    Description: Name of the Route53 hosted zone
-    Type: String
-
-  Subdomain:
-    Type: String
-    Default: playground
-
-  MinContainers:
-    Type: Number
-    Default: 2
-
-  MaxContainers:
-    Type: Number
-    Default: 10
-
-  AutoScalingTargetValue:
-    Type: Number
-    Default: 50
-
 Resources:
 
+  # TODO: -> Cluster
   Cluster:
     Type: AWS::ECS::Cluster
     Properties:
       ClusterName: !Ref AWS::StackName
 
-  TaskDefinition:
-    Type: AWS::ECS::TaskDefinition
-    Properties:
-      ContainerDefinitions:
-        -
-          Essential: True
-          Image: !Ref Image
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-region: !Ref AWS::Region
-              awslogs-group: !Ref LogGroup
-              awslogs-stream-prefix: ecs
-          Name: !Ref AWS::StackName
-          PortMappings:
-            -
-              ContainerPort: !Ref ContainerPort
-              HostPort: !Ref ContainerPort
-              Protocol: tcp
-
-      Cpu: 256
-      ExecutionRoleArn: !Ref ExecutionRole
-      Family: !Ref AWS::StackName
-      Memory: 0.5GB
-      NetworkMode: awsvpc
-      RequiresCompatibilities:
-        - FARGATE
-      TaskRoleArn: !Ref TaskRole
-
-  ContainerSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: !Ref "AWS::StackName"
-      VpcId: !Ref VpcId
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: !Ref ContainerPort
-          ToPort: !Ref ContainerPort
-          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
-
-  ExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Join ['', [!Ref "AWS::StackName", -ExecutionRole]]
-      AssumeRolePolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ecs-tasks.amazonaws.com
-            Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
-
-  TaskRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Join ['', [!Ref "AWS::StackName", -TaskRole]]
-      AssumeRolePolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ecs-tasks.amazonaws.com
-            Action: 'sts:AssumeRole'
-
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Join ['', [/ecs/, !Ref "AWS::StackName"]]
+      LogGroupName:
+        Fn::Sub: "/${AWS::StackName}/application-logs"
       RetentionInDays: 7
 
-  LoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      LoadBalancerAttributes:
-        # this is the default, but is specified here in case it needs to be changed
-        - Key: idle_timeout.timeout_seconds
-          Value: 60
-      Name: !Ref "AWS::StackName"
-      # "internal" is also an option
-      Scheme: internet-facing
-      SecurityGroups:
-        - !Ref LoadBalancerSecurityGroup
-      Subnets:
-        - !Ref SubnetA
-        - !Ref SubnetB
-
-  LoadBalancerSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: !Ref "AWS::StackName"
+      HealthCheckIntervalSeconds: 60
+      HealthCheckPath: /
+      HealthCheckTimeoutSeconds: 5
+      UnhealthyThresholdCount: 7
+      HealthyThresholdCount: 2
+      Port: !Ref HostPort
+      Protocol: !Ref ApplicationProtocol
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "20"
+        # - Key: stickiness.enabled
+        #   Value: "true"
+        # - Key: stickiness.type
+        #   Value: lb_cookie
+        # - Key: stickiness.lb_cookie.duration_seconds
+        #   Value: "86400"
+      TargetType: ip
       VpcId: !Ref VpcId
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: !Ref LoadBalancerPort
-          ToPort: !Ref LoadBalancerPort
-          CidrIp: 0.0.0.0/0
 
-  ListenerHttps:
+  ListenerHTTPS:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
         - TargetGroupArn: !Ref TargetGroup
           Type: forward
-      LoadBalancerArn: !Ref LoadBalancer
+      LoadBalancerArn: !Ref LoadBalancerArn
       Port: !Ref LoadBalancerPort
       Protocol: HTTPS
+      SslPolicy: 'ELBSecurityPolicy-TLS-1-2-Ext-2018-06'
       Certificates:
-        - CertificateArn: !Ref CertificateArn
+        - CertificateArn: !Ref SslCertificateArn
 
-  TargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
     Properties:
-      HealthCheckIntervalSeconds: 10
-      # will look for a 200 status code by default unless specified otherwise
-      HealthCheckPath: !Ref HealthCheckPath
-      HealthCheckPort: !Ref ContainerPort
-      HealthCheckTimeoutSeconds: 5
-      UnhealthyThresholdCount: 2
-      HealthyThresholdCount: 2
-      Name: !Sub "${AWS::StackName}-another"
-      Port: !Ref ContainerPort
-      Protocol: HTTPS
-      TargetGroupAttributes:
-        - Key: deregistration_delay.timeout_seconds
-          Value: 60 # default is 300
-      TargetType: ip
+      Family: !Ref AWS::StackName
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [ FARGATE ]
+      Cpu: "2048"
+      Memory: 4GB
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        -
+          Name: !Ref AWS::StackName
+          Image: !Ref DockerImage
+          Memory: 4096
+          PortMappings:
+            -
+              ContainerPort: !Ref ContainerPort
+              HostPort: !Ref HostPort
+              Protocol: tcp
+          Essential: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Ref LogGroup
+              awslogs-stream-prefix: !Ref AWS::StackName
+          Environment: []
+
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          Effect: Allow
+          Principal:
+            Service: ecs-tasks.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns: []
+      Policies: []
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          Effect: Allow
+          Principal:
+            Service: ecs-tasks.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  ContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Controls access to containers
       VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        -
+          Description: Ingress from public ALB
+          IpProtocol: -1
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroupId
+
+  ContainerSecurityGroupIngressFromSelf:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:  
+      Description: Ingress from other containers in the same security group
+      GroupId: !Ref ContainerSecurityGroup
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref ContainerSecurityGroup
 
   Service:
     Type: AWS::ECS::Service
-    # This dependency is needed so that the load balancer is setup correctly in time
-    DependsOn:
-      - ListenerHttps
     Properties:
-      ServiceName: !Ref "AWS::StackName"
       Cluster: !Ref Cluster
-      TaskDefinition: !Ref TaskDefinition
       DeploymentConfiguration:
-        MinimumHealthyPercent: 100
         MaximumPercent: 200
-      DesiredCount: 2
-      # This may need to be adjusted if the container takes a while to start up
-      # HealthCheckGracePeriodSeconds: 30
+        MinimumHealthyPercent: 50
+      DesiredCount: !Ref DesiredCount
+      HealthCheckGracePeriodSeconds: 300
       LaunchType: FARGATE
+      LoadBalancers:
+        -
+          ContainerName: !Ref AWS::StackName
+          ContainerPort: !Ref ContainerPort
+          TargetGroupArn: !Ref TargetGroup
+      TaskDefinition: !Ref TaskDefinition
       NetworkConfiguration:
         AwsvpcConfiguration:
-          # change to DISABLED if you're using private subnets that have access to a NAT gateway
-          AssignPublicIp: ENABLED
+          AssignPublicIp: DISABLED
           Subnets:
             - !Ref SubnetA
             - !Ref SubnetB
           SecurityGroups:
             - !Ref ContainerSecurityGroup
-      LoadBalancers:
-        - ContainerName: !Ref "AWS::StackName"
-          ContainerPort: !Ref ContainerPort
-          TargetGroupArn: !Ref TargetGroup
 
-  DNSRecord:
-    Type: AWS::Route53::RecordSet
-    Properties:
-      HostedZoneName: !Join ['', [!Ref HostedZoneName, .]]
-      Name: !Join ['', [!Ref Subdomain, ., !Ref HostedZoneName, .]]
-      Type: A
-      AliasTarget:
-        DNSName: !GetAtt LoadBalancer.DNSName
-        HostedZoneId: !GetAtt LoadBalancer.CanonicalHostedZoneID
-
-  AutoScalingTarget:
-    Type: AWS::ApplicationAutoScaling::ScalableTarget
-    Properties:
-      MinCapacity: !Ref MinContainers
-      MaxCapacity: !Ref MaxContainers
-      ResourceId: !Join ['/', [service, !Ref Cluster, !GetAtt Service.Name]]
-      ScalableDimension: ecs:service:DesiredCount
-      ServiceNamespace: ecs
-      # "The Amazon Resource Name (ARN) of an AWS Identity and Access Management (IAM) role that allows Application Auto Scaling to modify your scalable target."
-      RoleARN: !GetAtt AutoScalingRole.Arn
-
-  AutoScalingPolicy:
-    Type: AWS::ApplicationAutoScaling::ScalingPolicy
-    Properties:
-      PolicyName: !Join ['', [!Ref "AWS::StackName", -AutoScalingPolicy]]
-      PolicyType: TargetTrackingScaling
-      ScalingTargetId: !Ref AutoScalingTarget
-      TargetTrackingScalingPolicyConfiguration:
-        PredefinedMetricSpecification:
-          PredefinedMetricType: ECSServiceAverageCPUUtilization
-        ScaleInCooldown: 10
-        ScaleOutCooldown: 10
-        # Keep things at or lower than 50% CPU utilization, for example
-        TargetValue: !Ref AutoScalingTargetValue
-
-  AutoScalingRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Join ['', [!Ref "AWS::StackName", -AutoScalingRole]]
-      AssumeRolePolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ecs-tasks.amazonaws.com
-            Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole'
+Outputs: {}

@@ -1,0 +1,77 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: Elastic Load Balancer v2 (application load balancer)
+
+Parameters:
+
+  HostedZoneId:
+    Type: String
+
+  DomainName:
+    Type: String
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+
+  SubnetA:
+    Description: First subnet used by load balancer
+    Type: AWS::EC2::Subnet::Id
+
+  SubnetB:
+    Description: Second subnet used by load balancer
+    Type: AWS::EC2::Subnet::Id
+
+Resources:
+
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: Access to the load balancer
+      SecurityGroupIngress:
+        - 
+          Description: Allow all traffic from public
+          IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Ref AWS::StackName
+      Scheme: internet-facing
+      Subnets:
+        - !Ref SubnetA
+        - !Ref SubnetB
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+
+  LoadBalancerDnsEntry:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      RecordSets:
+        -
+          Name: !Ref DomainName
+          Type: A
+          AliasTarget:
+            HostedZoneId:
+              Fn::GetAtt: LoadBalancer.CanonicalHostedZoneID
+            DNSName:
+              Fn::GetAtt: LoadBalancer.DNSName
+
+Outputs:
+  LoadBalancer:
+    Description: A reference to the Application Load Balancer
+    Value: !Ref LoadBalancer
+    Export:
+      Name: !Sub "${AWS::Region}-${AWS::StackName}-LoadBalancer"
+
+  LoadBalancerUrl:
+    Description: The URL of the ALB
+    Value: !GetAtt LoadBalancer.DNSName
+    Export:
+      Name: !Sub "${AWS::Region}-${AWS::StackName}-LoadBalancerUrl"
+
+  LoadBalancerSecurityGroupId:
+    Description: ID for Loadbalancer Security Group
+    Value: !Ref LoadBalancerSecurityGroup
