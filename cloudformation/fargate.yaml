@@ -39,9 +39,28 @@ Parameters:
   SubnetB:
     Type: AWS::EC2::Subnet::Id
 
+  MinCapacity:
+    Description: Autoscaling min capacity
+    Type: Number
+
+  MaxCapacity:
+    Description: Autoscaling max capacity
+    Type: Number
+
+  Cpu:
+    Description: The number of cpu units used by the ECS tasks
+    Type: Number
+
+  Memory:
+    Description: The amount (in MiB) of memory used by the tasks
+    Type: Number
+
+  CpuTargetValueForScaling:
+    Description: Average cpu utilization in per cent used for auto scaling
+    Type: Number
+
 Resources:
 
-  # TODO: -> Cluster
   Cluster:
     Type: AWS::ECS::Cluster
     Properties:
@@ -67,12 +86,6 @@ Resources:
       TargetGroupAttributes:
         - Key: deregistration_delay.timeout_seconds
           Value: "20"
-        # - Key: stickiness.enabled
-        #   Value: "true"
-        # - Key: stickiness.type
-        #   Value: lb_cookie
-        # - Key: stickiness.lb_cookie.duration_seconds
-        #   Value: "86400"
       TargetType: ip
       VpcId: !Ref VpcId
 
@@ -95,15 +108,14 @@ Resources:
       Family: !Ref AWS::StackName
       NetworkMode: awsvpc
       RequiresCompatibilities: [ FARGATE ]
-      Cpu: "2048"
-      Memory: 4GB
+      Cpu: !Ref Cpu
+      Memory: !Ref Memory
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       TaskRoleArn: !GetAtt TaskRole.Arn
       ContainerDefinitions:
         -
           Name: !Ref AWS::StackName
           Image: !Ref DockerImage
-          Memory: 4096
           PortMappings:
             -
               ContainerPort: !Ref ContainerPort
@@ -149,17 +161,10 @@ Resources:
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         -
-          Description: Ingress from public ALB
-          IpProtocol: -1
+          IpProtocol: tcp
+          FromPort: !Ref HostPort
+          ToPort: !Ref HostPort
           SourceSecurityGroupId: !Ref LoadBalancerSecurityGroupId
-
-  ContainerSecurityGroupIngressFromSelf:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:  
-      Description: Ingress from other containers in the same security group
-      GroupId: !Ref ContainerSecurityGroup
-      IpProtocol: -1
-      SourceSecurityGroupId: !Ref ContainerSecurityGroup
 
   Service:
     Type: AWS::ECS::Service
@@ -179,11 +184,58 @@ Resources:
       TaskDefinition: !Ref TaskDefinition
       NetworkConfiguration:
         AwsvpcConfiguration:
-          AssignPublicIp: DISABLED
+          AssignPublicIp: ENABLED
           Subnets:
             - !Ref SubnetA
             - !Ref SubnetB
           SecurityGroups:
             - !Ref ContainerSecurityGroup
 
-Outputs: {}
+  AutoScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MinCapacity: !Ref MinCapacity
+      MaxCapacity: !Ref MaxCapacity
+      ResourceId: !Sub "service/${Cluster}/${Service.Name}"
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+      RoleARN: !GetAtt AutoScalingRole.Arn
+
+  AutoScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub "${AWS::StackName}-AutoScalingPolicy"
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref AutoScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        ScaleInCooldown: 10
+        ScaleOutCooldown: 10
+        TargetValue: !Ref CpuTargetValueForScaling
+
+  AutoScalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          Effect: Allow
+          Principal:
+            Service: ecs-tasks.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole
+
+Outputs:
+
+  ClusterName:
+    Description: The ECS cluster name
+    Value: !Ref Cluster
+    Export:
+      Name: !Sub "${AWS::Region}-${AWS::StackName}-ClusterName"
+
+  ServiceName:
+    Description: The ECS service name
+    Value: !GetAtt Service.Name
+    Export:
+      Name: !Sub "${AWS::Region}-${AWS::StackName}-ServiceName"

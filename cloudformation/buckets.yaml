@@ -1,0 +1,62 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: S3 Buckets
+
+Parameters:
+  BucketPrefix:
+    Description: Prefix used for bucket names
+    Type: String
+
+Resources:
+
+  LogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          -
+            ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      BucketName: !Sub "${BucketPrefix}-logs-${AWS::Region}-${AWS::AccountId}"
+      LifecycleConfiguration:
+        Rules:
+          - Id: AutoExpireRule
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 2
+            ExpirationInDays: 7
+            Status: Enabled
+
+  LogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Principal:
+              AWS: !Sub "arn:aws:iam::054676820928:root"
+            Action: s3:PutObject
+            Effect: Allow
+            Resource: !Sub '${LogsBucket.Arn}/*AWSLogs/${AWS::AccountId}/*'
+          - Principal:
+              Service: "delivery.logs.amazonaws.com"
+            Action: s3:PutObject
+            Effect: Allow
+            Resource: !Sub "${LogsBucket.Arn}/*AWSLogs/${AWS::AccountId}/*"
+            Condition:
+              StringEquals:
+                "s3:x-amz-acl": "bucket-owner-full-control"
+          - Principal:
+              Service: "delivery.logs.amazonaws.com"
+            Action: s3:GetBucketAcl
+            Effect: Allow
+            Resource: !GetAtt "LogsBucket.Arn"
+
+Outputs:
+
+  LogsBucket:
+    Description: Name of the logs bucket
+    Value: !Ref LogsBucket
+    Export:
+      Name: !Sub "${AWS::Region}-${AWS::StackName}-LogsBucket"

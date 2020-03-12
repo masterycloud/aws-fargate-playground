@@ -1,20 +1,14 @@
 #!/usr/bin/env bash
 
-set -eo pipefail
+SERVICE=$1
 
-NAME=$1
+BUCKET_NAME=$(aws cloudformation describe-stacks --stack-name "${SERVICE}-buckets" | jq .Stacks[0].Outputs[0].OutputValue -r)
+echo ${BUCKET_NAME}
+aws s3 rb s3://${BUCKET_NAME} --force || true
 
-echo ">>> Delete stack fargate-playground..."
-aws cloudformation delete-stack --stack-name ${NAME}-fargate
-
-echo
-echo ">>> Delete stack alb..."
-aws cloudformation delete-stack --stack-name ${NAME}-alb
-
-echo
-echo ">>> Delete stack certificate..."
-aws cloudformation delete-stack --stack-name ${NAME}-certificate
-
-echo
-echo ">>> Delete stack vpc..."
-aws cloudformation delete-stack --stack-name ${NAME}-vpc
+aws cloudformation delete-stack --stack-name ${SERVICE}-dashboard
+aws cloudformation delete-stack --stack-name ${SERVICE}-service
+aws cloudformation delete-stack --stack-name ${SERVICE}-certificate
+aws cloudformation delete-stack --stack-name ${SERVICE}-alb
+aws cloudformation delete-stack --stack-name ${SERVICE}-vpc
+aws cloudformation delete-stack --stack-name ${SERVICE}-bucket

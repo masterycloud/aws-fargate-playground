@@ -1,0 +1,75 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: Cloudwatch dashboard
+
+Parameters:
+
+  ClusterName:
+    Description: The name of the ECS cluster
+    Type: String
+
+  ServiceName:
+    Description: The name of the ECS service
+    Type: String
+
+Resources:
+
+  Dashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Ref AWS::StackName
+      DashboardBody: !Sub |
+        {
+            "widgets": [
+                {
+                    "type": "metric",
+                    "x": 0,
+                    "y": 0,
+                    "width": 12,
+                    "height": 6,
+                    "properties": {
+                        "metrics": [
+                            [ "AWS/ECS", "CPUUtilization", "ClusterName", "${ClusterName}", "ServiceName", "${ServiceName}", { "label": "CPUUtilization Minimum", "stat": "Minimum", "id": "m1" } ],
+                            [ { "expression": "ANOMALY_DETECTION_BAND(m1, 2)", "label": "CPUUtilization Minimum (expected)", "id": "ad3", "color": "#666666", "region": "${AWS::Region}" } ],
+                            [ "AWS/ECS", "CPUUtilization", "ClusterName", "${ClusterName}", "ServiceName", "${ServiceName}", { "label": "CPUUtilization Maximum", "id": "m2" } ],
+                            [ { "expression": "ANOMALY_DETECTION_BAND(m2, 2)", "label": "CPUUtilization Maximum (expected)", "id": "ad2", "color": "#666666", "region": "${AWS::Region}" } ],
+                            [ "AWS/ECS", "CPUUtilization", "ClusterName", "${ClusterName}", "ServiceName", "${ServiceName}", { "label": "CPUUtilization Average", "stat": "Average", "id": "m3" } ],
+                            [ { "expression": "ANOMALY_DETECTION_BAND(m3, 2)", "label": "CPUUtilization Average (expected)", "id": "ad1", "color": "#666666", "region": "${AWS::Region}" } ]
+                        ],
+                        "period": 300,
+                        "stat": "Maximum",
+                        "region": "${AWS::Region}",
+                        "view": "timeSeries",
+                        "stacked": false,
+                        "title": "CPUUtilization"
+                    }
+                },
+                {
+                    "type": "metric",
+                    "x": 12,
+                    "y": 0,
+                    "width": 12,
+                    "height": 6,
+                    "properties": {
+                        "metrics": [
+                            [ "AWS/ECS", "MemoryUtilization", "ClusterName", "${ClusterName}", "ServiceName", "${ServiceName}", { "id": "m1" } ],
+                            [ { "expression": "ANOMALY_DETECTION_BAND(m1, 2)", "label": "MemoryUtilization (expected)", "id": "ad1", "color": "#666666" } ],
+                            [ "AWS/ECS", "MemoryUtilization", "ClusterName", "${ClusterName}", "ServiceName", "${ServiceName}", { "id": "m2", "stat": "Maximum" } ],
+                            [ { "expression": "ANOMALY_DETECTION_BAND(m2, 2)", "label": "MemoryUtilization Maximum (expected)", "id": "ad2", "color": "#666666" } ],
+                            [ "AWS/ECS", "MemoryUtilization", "ClusterName", "${ClusterName}", "ServiceName", "${ServiceName}", { "id": "m3", "stat": "Average" } ],
+                            [ { "expression": "ANOMALY_DETECTION_BAND(m3, 2)", "label": "MemoryUtilization Average (expected)", "id": "ad3", "color": "#666666" } ]
+                        ],
+                        "period": 300,
+                        "stat": "Minimum",
+                        "region": "${AWS::Region}",
+                        "start": "-PT12H3M",
+                        "end": "P0D",
+                        "view": "timeSeries",
+                        "stacked": false,
+                        "title": "MemoryUtilization"
+                    }
+                }
+            ]
+        }
+
+Outputs: {}
