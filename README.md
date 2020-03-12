@@ -23,12 +23,13 @@ The infrastructure contains the following components:
 You can deploy the fargate-playground with
 
 ```
-./bin/deploy.sh myplayground
+./bin/deploy.sh myplayground your.domain.com
 ```
 
-Before executing this script you should open it and change the values
-for `HOSTED_ZONE_NAME`. For this values you need to setup a hosted
-zone for a given domain name in AWS Route53.
+The first parameter defines the service name and is also used as subdomain.
+The second parameter defines the root domain for which you should have
+a hosted zone setup in AWS Route53. The service will then be available
+under `myplayground.your.domain.com` SSL port 443.
 
 ## Test
 
@@ -36,7 +37,7 @@ In order to see the autoscaling work run a HTTP benchmark tool like
 [hey](https://github.com/rakyll/hey) like so
 
 ```
-hey -n "$((1000 * 1000 * 100)) -c 50 -q 100 https://myplayground.<your domain>
+hey -n "$((1000 * 1000 * 100)) -c 50 -q 100 https://myplayground.your.domain.com
 ```
 
 Then navigate to the AWS ECS console and wait until the average

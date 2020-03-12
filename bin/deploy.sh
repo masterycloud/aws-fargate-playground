@@ -4,7 +4,7 @@ set -eo pipefail
 
 # Used in Cloudformation stack names so that each user can deploy stacks
 SERVICE=$1
-HOSTED_ZONE_NAME="devops-hamburg.de"
+HOSTED_ZONE_NAME=$2
 DOMAIN_NAME="${SERVICE}.${HOSTED_ZONE_NAME}"
 DOCKER_IMAGE="rancher/hello-world"
 LOAD_BALANCER_PORT="443"
