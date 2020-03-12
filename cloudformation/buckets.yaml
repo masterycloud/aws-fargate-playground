@@ -7,6 +7,31 @@ Parameters:
     Description: Prefix used for bucket names
     Type: String
 
+Mappings:
+  RegionMap:
+    ap-east-1:      {"LoadBalancerAccountId": "754344448648"}
+    ap-northeast-1: {"LoadBalancerAccountId": "582318560864"}
+    ap-northeast-2: {"LoadBalancerAccountId": "600734575887"}
+    ap-northeast-3: {"LoadBalancerAccountId": "383597477331"}
+    ap-south-1:     {"LoadBalancerAccountId": "718504428378"}
+    ap-southeast-1: {"LoadBalancerAccountId": "114774131450"}
+    ap-southeast-2: {"LoadBalancerAccountId": "783225319266"}
+    ca-central-1:   {"LoadBalancerAccountId": "985666609251"}
+    cn-north-1:     {"LoadBalancerAccountId": "638102146993"}
+    cn-northwest-1: {"LoadBalancerAccountId": "037604701340"}
+    eu-central-1:   {"LoadBalancerAccountId": "054676820928"}
+    eu-north-1:     {"LoadBalancerAccountId": "897822967062"}
+    eu-west-1:      {"LoadBalancerAccountId": "156460612806"}
+    eu-west-2:      {"LoadBalancerAccountId": "652711504416"}
+    eu-west-3:      {"LoadBalancerAccountId": "009996457667"}
+    sa-east-1:      {"LoadBalancerAccountId": "507241528517"}
+    us-east-1:      {"LoadBalancerAccountId": "127311923021"}
+    us-east-2:      {"LoadBalancerAccountId": "033677994240"}
+    us-gov-east-1:  {"LoadBalancerAccountId": "190560391635"}
+    us-gov-west-1:  {"LoadBalancerAccountId": "048591011584"}
+    us-west-1:      {"LoadBalancerAccountId": "027434742980"}
+    us-west-2:      {"LoadBalancerAccountId": "797873946194"}
+
 Resources:
 
   LogsBucket:
@@ -35,7 +60,7 @@ Resources:
         Version: '2012-10-17'
         Statement:
           - Principal:
-              AWS: !Sub "arn:aws:iam::054676820928:root"
+              AWS: !Join [":", ["arn:aws:iam:", !FindInMap [RegionMap, !Ref "AWS::Region", "LoadBalancerAccountId"], "root"]]
             Action: s3:PutObject
             Effect: Allow
             Resource: !Sub '${LogsBucket.Arn}/*AWSLogs/${AWS::AccountId}/*'
