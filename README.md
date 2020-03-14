@@ -31,6 +31,9 @@ The second parameter defines the root domain for which you should have
 a hosted zone setup in AWS Route53. The service will then be available
 under `myplayground.your.domain.com` SSL port 443.
 
+> Note: Deploying the certificate stack requires you to acknowledge the
+created certificate in AWS ACM via DNS validation. See [Use DNS to Validate Domain Ownership](https://docs.aws.amazon.com/acm/latest/userguide/gs-acm-validate-dns.html) in the AWS documentation for more details.
+
 ## Test
 
 In order to see the autoscaling work run a HTTP benchmark tool like
@@ -41,6 +44,6 @@ hey -n "$((1000 * 1000 * 100)) -c 50 -q 100 https://myplayground.your.domain.com
 ```
 
 Then navigate to the AWS ECS console and wait until the average
-load of any running ECS tasks exceeds the given threshold 
+load of any running ECS tasks exceeds the given threshold
 (see `CPU_TARGET_VALUE_FOR_SCALING` in [bin/deploy.sh](./bin/deploy.sh)).
 This event will trigger ECS to create more ECS tasks/container.

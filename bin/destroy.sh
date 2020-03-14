@@ -11,4 +11,4 @@ aws cloudformation delete-stack --stack-name ${SERVICE}-fargate
 aws cloudformation delete-stack --stack-name ${SERVICE}-certificate
 aws cloudformation delete-stack --stack-name ${SERVICE}-alb
 aws cloudformation delete-stack --stack-name ${SERVICE}-vpc
-aws cloudformation delete-stack --stack-name ${SERVICE}-bucket
+aws cloudformation delete-stack --stack-name ${SERVICE}-buckets

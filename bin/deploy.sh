@@ -6,7 +6,7 @@ set -eo pipefail
 SERVICE=$1
 HOSTED_ZONE_NAME=$2
 DOMAIN_NAME="${SERVICE}.${HOSTED_ZONE_NAME}"
-DOCKER_IMAGE="rancher/hello-world"
+DOCKER_IMAGE="masterycloud/hello-world"
 LOAD_BALANCER_PORT="443"
 HOST_PORT="80"
 CONTAINER_PORT="80"
